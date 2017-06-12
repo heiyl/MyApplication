@@ -25,7 +25,7 @@
             <include layout="@layout/xdf_player_bar_top_view" />
 
             <include
-                layout="@layout/xdf_player_bar_bottom_view"
+                layout="@layout/xdf_vodplayer_bar_bottom_view"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_gravity="bottom" />
@@ -68,8 +68,4 @@
 
         </LinearLayout>
     </LinearLayout>
-
-    <include
-        android:id="@+id/startpage"
-        layout="@layout/xdf_startpage_view" />
 </FrameLayout>

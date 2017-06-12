@@ -6,7 +6,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
-import android.nfc.Tag;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -16,8 +15,11 @@ import android.support.v4.app.FragmentTransaction;
 import android.support.v4.view.ViewPager;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
@@ -44,6 +46,7 @@ import com.gensee.player.adapter.ViewPagerAdapter;
 import com.gensee.playerdemo.LogCatService;
 import com.gensee.playerdemo.R;
 import com.gensee.taskret.OnTaskRet;
+import com.gensee.utils.DensityUtil;
 import com.gensee.utils.GenseeLog;
 import com.gensee.view.GSVideoView;
 
@@ -56,14 +59,25 @@ import java.util.List;
  * yulong
  */
 
-public class PlayerActivity extends FragmentActivity implements OnPlayListener,OnTabSelectListener {
+public class PlayerActivity extends FragmentActivity implements OnPlayListener,OnTabSelectListener,View.OnClickListener {
 
     private static final String TAG = "PlayerActivity";
     private SharedPreferences preferences;
     private Player mPlayer;
+    private GSVideoView mGSViedoView;
 
     SlidingTabLayout mStlTab;
     ViewPager mViewPager;
+
+    LinearLayout mStartpage;
+    LinearLayout llt_joining;
+    LinearLayout llt_state;
+    TextView tv_refresh;
+
+    ImageView iv_screen;
+    LinearLayout llt_bottom;
+
+    private boolean isFullScreen;
 
     private ArrayList<String> mTagList = new ArrayList<String>();
     private ArrayList<Fragment> mFragmentList;
@@ -108,6 +122,7 @@ public class PlayerActivity extends FragmentActivity implements OnPlayListener,O
         int CACHING = 6;
         int CACHING_END = 7;
         int RECONNECTING = 8;
+        int CONNECTFAIL = 9;
     }
 
     private Handler mHandler = new Handler() {
@@ -134,9 +149,14 @@ public class PlayerActivity extends FragmentActivity implements OnPlayListener,O
                             .putString(ConfigApp.PARAMS_NICKNAME, nickName)
                             .putString(ConfigApp.PARAMS_JOINPWD, joinPwd).commit();
                     bJoinSuccess = true;
+                    mStartpage.setVisibility(View.GONE);
                     /*if (mViedoFragment != null) {
                         mViedoFragment.onJoin(bJoinSuccess);
                     }*/
+                    break;
+                case HANDlER.CONNECTFAIL:
+                    llt_joining.setVisibility(View.GONE);
+                    llt_state.setVisibility(View.VISIBLE);
                     break;
                 case HANDlER.SUCCESSLEAVE:
                     dialog();
@@ -224,7 +244,7 @@ public class PlayerActivity extends FragmentActivity implements OnPlayListener,O
 
                 initInitParam();
             }
-        }, 3000);
+        }, 1500);
     }
 
     private boolean isNumber(String number) {
@@ -238,6 +258,9 @@ public class PlayerActivity extends FragmentActivity implements OnPlayListener,O
     }
 
     public void initInitParam() {
+
+        llt_joining.setVisibility(View.VISIBLE);
+        llt_state.setVisibility(View.GONE);
 
         InitParam initParam = new InitParam();
         // 设置域名
@@ -278,6 +301,15 @@ public class PlayerActivity extends FragmentActivity implements OnPlayListener,O
     public void initWidget() {
         mStlTab = (SlidingTabLayout)findViewById(R.id.stl_tab);
         mViewPager = (ViewPager)findViewById(R.id.viewPager);
+        mStartpage = (LinearLayout) findViewById(R.id.startpage);
+        llt_joining = (LinearLayout) findViewById(R.id.llt_joining);
+        llt_state = (LinearLayout) findViewById(R.id.llt_state);
+        tv_refresh = (TextView) findViewById(R.id.tv_refresh);
+        tv_refresh.setOnClickListener(this);
+
+        iv_screen = (ImageView) findViewById(R.id.iv_screen);
+        llt_bottom = (LinearLayout) findViewById(R.id.llt_bottom);
+        iv_screen.setOnClickListener(this);
 
 
         relTip = (RelativeLayout) findViewById(R.id.rl_tip);
@@ -285,8 +317,24 @@ public class PlayerActivity extends FragmentActivity implements OnPlayListener,O
 
         mPlayer = new Player();
 
-        GSVideoView mGSViedoView = (GSVideoView) findViewById(R.id.impvoteview);
+        mGSViedoView = (GSVideoView) findViewById(R.id.impvoteview);
         mPlayer.setGSVideoView(mGSViedoView);
+    }
+
+    @Override
+    public void onClick(View v) {
+        if(v.getId() == R.id.iv_screen) {
+            int orientation = getRequestedOrientation();
+            if (orientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                    || orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) {
+                orientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+            } else {
+                orientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT;
+            }
+            setRequestedOrientation(orientation);
+        }else if(v.getId() == R.id.tv_refresh) {
+            initInitParam();
+        }
     }
 
     public void bindViewPager() {
@@ -379,6 +427,7 @@ public class PlayerActivity extends FragmentActivity implements OnPlayListener,O
                 break;
             case JOIN_CONNECT_FAILED:
                 msg = "连接失败";
+                mHandler.sendEmptyMessage(HANDlER.CONNECTFAIL);
                 break;
             case JOIN_RTMP_FAILED:
                 msg = "连接服务器失败";
@@ -528,6 +577,7 @@ public class PlayerActivity extends FragmentActivity implements OnPlayListener,O
                 break;
             case AbsRtAction.ErrCode.ERR_UN_NET:
                 msg = "网络不可用，请检查网络连接正常后再试";
+                mHandler.sendEmptyMessage(HANDlER.CONNECTFAIL);
                 break;
             case AbsRtAction.ErrCode.ERR_SERVICE:
                 msg = "service  错误，请确认是webcast还是training";
@@ -776,9 +826,19 @@ public class PlayerActivity extends FragmentActivity implements OnPlayListener,O
     }
 
     private void videoFullScreen() {
+        llt_bottom.setVisibility(View.GONE);
+        ViewGroup.LayoutParams params = mGSViedoView.getLayoutParams();
+        params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+        params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+        mGSViedoView.setLayoutParams(params);
     }
 
     private void videoNormalScreen() {
+        llt_bottom.setVisibility(View.VISIBLE);
+        ViewGroup.LayoutParams params = mGSViedoView.getLayoutParams();
+        params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+        params.height = DensityUtil.dip2px(this,281);
+        mGSViedoView.setLayoutParams(params);
     }
 
     @Override
